@@ -1,12 +1,12 @@
 {
-  "name": "image-generation-mcp",
+  "name": "image-generation-mcp-server",
   "version": "0.1.0",
   "description": "MCP server that automates image generation on ChatGPT web, edits images by instruction, and saves them locally.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "image-generation-mcp": "dist/index.js"
+    "image-generation-mcp-server": "dist/index.js"
   },
   "files": [
     "dist",

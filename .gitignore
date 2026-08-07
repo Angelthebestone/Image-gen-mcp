@@ -26,3 +26,8 @@ Thumbs.db
 
 # Local tooling config
 .commandcode/
+
+# Release artifacts
+.mcpb-build/
+*.mcpb
+*.tgz
