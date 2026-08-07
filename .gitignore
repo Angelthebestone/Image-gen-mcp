@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Local runtime data (browser profile with session cookies, config)
+~/.image-generation/
+.image-generation/
+
+# Env
+.env
+.env.local
+
+# Local tooling config
+.commandcode/
