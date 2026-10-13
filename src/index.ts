@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { statSync } from "node:fs";
 import { loadConfig, saveConfig } from "./config.js";
+import type { Page } from "playwright";
 import { launchBrowser, isLoggedIn, ensureSinglePage, conversationIdFromUrl } from "./browser.js";
 import { generateImage, editImage } from "./chatgpt.js";
 import { resolveOutputDir, uniqueFilePath, saveImage } from "./storage.js";
@@ -14,16 +15,42 @@ const config = loadConfig();
 // Headless Chrome (works with Cloudflare) — no visible window, ever.
 // The single persistent page is reused for every request.
 // If no session exists yet, relaunch visible so the user can log in manually.
-let browser = await launchBrowser(config);
-let page = await ensureSinglePage(browser);
-await page.goto("https://chatgpt.com/", { waitUntil: "domcontentloaded" });
-let loggedIn = await isLoggedIn(page);
-if (!loggedIn) {
-  await browser.close();
-  // No session: open a VISIBLE window so the user can log in manually.
-  browser = await launchBrowser(config, false);
-  page = await ensureSinglePage(browser);
-  await page.goto("https://chatgpt.com/auth/login", { waitUntil: "domcontentloaded" });
+// ponytail: launched lazily so the MCP handshake never depends on Chrome; only one
+// process can own the profile, so a second client (Desktop + Code) gets a clear error.
+let page: Page | null = null;
+let pagePromise: Promise<Page> | null = null;
+
+async function openPage(): Promise<Page> {
+  let browser = await launchBrowser(config);
+  let p = await ensureSinglePage(browser);
+  await p.goto("https://chatgpt.com/", { waitUntil: "domcontentloaded" });
+  if (!(await isLoggedIn(p))) {
+    await browser.close();
+    // No session: open a VISIBLE window so the user can log in manually.
+    browser = await launchBrowser(config, false);
+    p = await ensureSinglePage(browser);
+    await p.goto("https://chatgpt.com/auth/login", { waitUntil: "domcontentloaded" });
+  }
+  browser.on("close", () => {
+    page = null;
+    pagePromise = null;
+  });
+  return p;
+}
+
+async function getPage(): Promise<Page> {
+  pagePromise ??= openPage().then(
+    (p) => (page = p),
+    (err: Error) => {
+      pagePromise = null;
+      throw new Error(
+        `No se pudo abrir Chrome con el perfil ${config.browserProfilePath}. ` +
+          `Probablemente otra instancia del MCP (Claude Desktop / Claude Code) ya lo está usando; ciérrela e inténtelo de nuevo. ` +
+          `Detalle: ${err.message.split("\n")[0]}`,
+      );
+    },
+  );
+  return pagePromise;
 }
 
 function resolveFilename(filename?: string): string {
@@ -38,7 +65,7 @@ async function handleImageResult(buffer: Buffer, savePath?: string, filename?: s
 }
 
 function currentConversationId(): string | null {
-  return conversationIdFromUrl(page.url());
+  return page ? conversationIdFromUrl(page.url()) : null;
 }
 
 function formatResult(message: string): string {
@@ -61,7 +88,7 @@ server.registerTool(
   },
   async ({ prompt, save_path, filename, aspect_ratio }) => {
     try {
-      const { buffer } = await generateImage(page, prompt, { aspectRatio: aspect_ratio as AspectRatio | undefined });
+      const { buffer } = await generateImage(await getPage(), prompt, { aspectRatio: aspect_ratio as AspectRatio | undefined });
       const path = await handleImageResult(buffer, save_path, filename);
       return { content: [{ type: "text", text: formatResult(`Imagen guardada en: ${path}`) }] };
     } catch (err) {
@@ -86,7 +113,7 @@ server.registerTool(
   },
   async ({ edit_instruction, conversation_id, save_path, filename, aspect_ratio }) => {
     try {
-      const { buffer } = await editImage(page, edit_instruction, {
+      const { buffer } = await editImage(await getPage(), edit_instruction, {
         conversationId: conversation_id,
         aspectRatio: aspect_ratio as AspectRatio | undefined,
       });
@@ -152,7 +179,12 @@ server.registerTool(
     inputSchema: {},
   },
   async () => {
-    const loggedInNow = await isLoggedIn(page);
+    let loggedInNow: boolean;
+    try {
+      loggedInNow = await isLoggedIn(await getPage());
+    } catch (err) {
+      return { content: [{ type: "text", text: `Error: ${(err as Error).message}` }] };
+    }
     return {
       content: [
         { type: "text", text: loggedInNow ? "Sesión activa" : "No autenticado. Abra el navegador e inicie sesión manualmente." },
