@@ -9,7 +9,7 @@ import { generateImage, editImage } from "./chatgpt.js";
 import { resolveOutputDir, uniqueFilePath, saveImage } from "./storage.js";
 import { ASPECT_RATIOS, type AspectRatio } from "./selectors.js";
 
-const server = new McpServer({ name: "image-generation", version: "0.1.0" });
+const server = new McpServer({ name: "image-generation", version: "0.1.1" });
 const config = loadConfig();
 
 // Headless Chrome (works with Cloudflare) — no visible window, ever.

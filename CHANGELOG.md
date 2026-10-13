@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-13
+
+### Fixed
+
+- Server no longer crashes on startup when the Chrome profile is already in use by another instance (e.g. Claude Desktop alongside Claude Code). The browser now launches on first tool use and a locked profile returns a clear error.
+
+## [0.1.0]
+
 ### Added
 
 - Initial MCP server implementation:
